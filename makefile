@@ -2,6 +2,7 @@
 
 # Variables
 BINARY_NAME=agentsecrets
+SERVER_BINARY_NAME=agentsecrets-server
 VERSION?=1.1.2
 BUILD_DIR=bin
 GO=go
@@ -15,7 +16,7 @@ help:
 	@echo "Usage: make [target]"
 	@echo ""
 	@echo "Targets:"
-	@echo "  build       Build the binary for current OS"
+	@echo "  build       Build the CLI and server binaries for current OS"
 	@echo "  test        Run all tests"
 	@echo "  run         Build and run the CLI"
 	@echo "  clean       Remove build artifacts"
@@ -32,6 +33,8 @@ build:
 	@mkdir -p $(BUILD_DIR)
 	$(GO) build -ldflags "-X github.com/The-17/agentsecrets/cmd/agentsecrets/commands.Version=$(VERSION)" -o $(BUILD_DIR)/$(BINARY_NAME) ./cmd/agentsecrets/
 	@echo "✓ Built $(BUILD_DIR)/$(BINARY_NAME)"
+	$(GO) build -o $(BUILD_DIR)/$(SERVER_BINARY_NAME) ./server/
+	@echo "✓ Built $(BUILD_DIR)/$(SERVER_BINARY_NAME)"
 
 # Run tests
 test:
