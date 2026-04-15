@@ -15,8 +15,8 @@ RUN go mod download
 # Copy source code
 COPY . .
 
-# Build the binary
-RUN CGO_ENABLED=1 GOOS=linux go build -a -installsuffix cgo -o agentsecrets ./cmd/agentsecrets
+# Build the API server binary
+RUN CGO_ENABLED=0 GOOS=linux go build -a -installsuffix cgo -o api-server ./server
 
 # Final stage
 FROM alpine:latest
@@ -24,19 +24,13 @@ FROM alpine:latest
 WORKDIR /app
 
 # Install runtime dependencies
-RUN apk add --no-cache ca-certificates sqlite-libs
+RUN apk add --no-cache ca-certificates
 
 # Copy the binary from builder
-COPY --from=builder /app/agentsecrets /app/agentsecrets
+COPY --from=builder /app/api-server /app/api-server
 
-# Create directory for data storage
-RUN mkdir -p /app/data
+# Expose the API server port
+EXPOSE 8080
 
-# Expose the proxy server port
-EXPOSE 8765
-
-# Set the entry point
-ENTRYPOINT ["/app/agentsecrets"]
-
-# Default command runs the proxy server
-CMD ["proxy", "start", "--port", "8765"]
+# Run the API server
+ENTRYPOINT ["/app/api-server"]
