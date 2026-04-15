@@ -1,8 +1,6 @@
 package commands
 
 import (
-	"crypto/sha256"
-	"encoding/hex"
 	"fmt"
 	"os"
 	"strings"
@@ -11,6 +9,7 @@ import (
 	"golang.org/x/term"
 
 	"github.com/The-17/agentsecrets/pkg/config"
+	"github.com/The-17/agentsecrets/pkg/crypto"
 	"github.com/The-17/agentsecrets/pkg/keyring"
 	"github.com/The-17/agentsecrets/pkg/ui"
 	"github.com/The-17/agentsecrets/pkg/workspaces"
@@ -64,7 +63,7 @@ func verifyPasswordLocally() error {
 		return fmt.Errorf("Not logged in.")
 	}
 
-	if cfg.PasswordHash == "" {
+	if cfg.LocalAuthSalt == "" || cfg.LocalAuthToken == "" {
 		return fmt.Errorf("Please run 'agentsecrets login' once to enable secure local password verification for allowlist modifications.")
 	}
 
@@ -76,17 +75,7 @@ func verifyPasswordLocally() error {
 	fmt.Println() // newline after hidden input
 	password := string(passwordBytes)
 
-	hasher := sha256.New()
-	hasher.Write([]byte(cfg.Email + ":" + password))
-	inputHash := hex.EncodeToString(hasher.Sum(nil))
-
-	if inputHash != cfg.PasswordHash {
-		// Output manually to bypass cobra's default error formatting slightly if needed,
-		// or just return the error.
-		return fmt.Errorf("Incorrect password")
-	}
-
-	return nil
+	return crypto.VerifyLocalAuthToken(password, cfg.LocalAuthSalt, cfg.LocalAuthToken)
 }
 
 func syncAllowlistToKeyring(workspaceID string) error {

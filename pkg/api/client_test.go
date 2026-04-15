@@ -12,8 +12,8 @@ import (
 func TestAPIClient(t *testing.T) {
 	// 1. Mock server
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		// Verify headers
-		if !strings.Contains(r.URL.Path, "login") && r.Header.Get("Authorization") != "Bearer test-token" {
+		// Verify headers (srp/* endpoints are public and don't require a token)
+		if !strings.Contains(r.URL.Path, "srp") && r.Header.Get("Authorization") != "Bearer test-token" {
 			w.WriteHeader(http.StatusUnauthorized)
 			json.NewEncoder(w).Encode(map[string]string{"message": "invalid token"})
 			return
@@ -37,7 +37,7 @@ func TestAPIClient(t *testing.T) {
 					w.WriteHeader(http.StatusBadRequest)
 				}
 			}
-		case "/auth/login/":
+		case "/auth/srp/init/":
 			w.WriteHeader(http.StatusOK)
 			json.NewEncoder(w).Encode(map[string]string{"status": "ok"})
 		default:
@@ -53,8 +53,8 @@ func TestAPIClient(t *testing.T) {
 	client := NewClient(tokenProvider)
 	client.BaseURL = server.URL // Override for test
 
-	// 3. Test simple POST (login is a public endpoint)
-	resp, err := client.Call("auth.login", "POST", map[string]string{"email": "t@t.com"}, nil, nil)
+	// 3. Test simple POST (login_init is a public endpoint)
+	resp, err := client.Call("auth.login_init", "POST", map[string]string{"email": "t@t.com"}, nil, nil)
 	if err != nil {
 		t.Fatalf("Call failed: %v", err)
 	}

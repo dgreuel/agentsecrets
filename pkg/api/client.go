@@ -21,8 +21,11 @@ const DefaultBaseURL = "https://secrets-api-orpin.vercel.app/api"
 // endpointMap defines all API routes, matching the Python ENDPOINT_MAP exactly
 var endpointMap = map[string]map[string]string{
 	"auth": {
-		"signup":  "auth/register/",
-		"login":   "auth/login/",
+		// SRP endpoints — password never sent over the wire
+		"signup":       "auth/srp/register/", // accepts srp_salt + srp_verifier, not password
+		"login_init":   "auth/srp/init/",     // step 1: client sends email, receives srp_salt + server_ephemeral
+		"login_verify": "auth/srp/verify/",   // step 2: client sends A + M1, receives M2 + tokens
+		// Standard session management (unchanged)
 		"logout":  "auth/logout/",
 		"refresh": "auth/refresh/",
 	},
@@ -79,9 +82,10 @@ var endpointMap = map[string]map[string]string{
 
 // publicEndpoints are endpoints that don't require an auth token
 var publicEndpoints = map[string]bool{
-	"auth.signup":  true,
-	"auth.login":   true,
-	"auth.refresh": true,
+	"auth.signup":       true,
+	"auth.login_init":   true,
+	"auth.login_verify": true,
+	"auth.refresh":      true,
 }
 
 // Client handles all HTTP communication with the AgentSecrets API server.

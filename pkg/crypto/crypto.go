@@ -15,6 +15,7 @@ import (
 	"crypto/aes"
 	"crypto/cipher"
 	"crypto/rand"
+	"crypto/subtle"
 	"encoding/base64"
 	"encoding/hex"
 	"fmt"
@@ -246,6 +247,41 @@ func DecryptFromUser(privateKey, publicKey, encrypted []byte) ([]byte, error) {
 	}
 
 	return decrypted, nil
+}
+
+// DeriveLocalAuthToken creates a new random salt and derives an Argon2id token
+// from the password.  The token is stored in the local config and used by
+// VerifyLocalAuthToken to confirm the user's password offline (e.g. for
+// allowlist modifications) without contacting the server.
+//
+// This replaces the old SHA-256(email:password) approach with proper
+// password hashing.  Returns (saltHex, tokenHex).
+func DeriveLocalAuthToken(password string) (saltHex, tokenHex string, err error) {
+	salt, err := randomBytes(SaltSize)
+	if err != nil {
+		return "", "", fmt.Errorf("local auth: generate salt: %w", err)
+	}
+	saltHex = hex.EncodeToString(salt)
+	key := argon2.IDKey([]byte(password), salt, argonTime, argonMemory, argonThreads, argonKeyLen)
+	return saltHex, hex.EncodeToString(key), nil
+}
+
+// VerifyLocalAuthToken checks whether password matches the stored Argon2id
+// token.  Returns nil on success, an error on mismatch.
+func VerifyLocalAuthToken(password, saltHex, storedTokenHex string) error {
+	salt, err := hex.DecodeString(saltHex)
+	if err != nil {
+		return fmt.Errorf("local auth: invalid salt: %w", err)
+	}
+	key := argon2.IDKey([]byte(password), salt, argonTime, argonMemory, argonThreads, argonKeyLen)
+	storedToken, err := hex.DecodeString(storedTokenHex)
+	if err != nil {
+		return fmt.Errorf("local auth: invalid stored token: %w", err)
+	}
+	if subtle.ConstantTimeCompare(key, storedToken) != 1 {
+		return fmt.Errorf("incorrect password")
+	}
+	return nil
 }
 
 // --- Internal Helpers ---

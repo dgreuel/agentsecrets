@@ -100,7 +100,7 @@ func TestProjectConfig(t *testing.T) {
 	}
 	defer os.Chdir(originalWD)
 
-	if err := InitProjectConfig(); err != nil {
+	if err := InitProjectConfig(1); err != nil {
 		t.Fatalf("InitProjectConfig failed: %v", err)
 	}
 
