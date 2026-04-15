@@ -1,0 +1,56 @@
+version: '3.8'
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: agentsecrets-db
+    environment:
+      POSTGRES_USER: agentsecrets
+      POSTGRES_PASSWORD: agentsecrets_password
+      POSTGRES_DB: agentsecrets
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U agentsecrets"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - agentsecrets-network
+
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: agentsecrets-api
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      # Database configuration
+      DATABASE_URL: "postgres://agentsecrets:agentsecrets_password@postgres:5432/agentsecrets"
+
+      # API Server configuration
+      API_PORT: "8765"
+      API_HOST: "0.0.0.0"
+
+      # Optional: Add your configuration here
+      LOG_LEVEL: "info"
+    ports:
+      - "8765:8765"
+    volumes:
+      - ./data:/app/data
+    networks:
+      - agentsecrets-network
+    command: ["proxy", "start", "--port", "8765"]
+    restart: unless-stopped
+
+volumes:
+  postgres_data:
+    driver: local
+
+networks:
+  agentsecrets-network:
+    driver: bridge

@@ -1,0 +1,50 @@
+.git
+.gitignore
+.github
+.DS_Store
+.env
+.env.local
+.env.*.local
+
+# Development
+node_modules
+npm-debug.log
+yarn-error.log
+pnpm-error.log
+
+# Python
+__pycache__
+*.egg-info
+.venv
+venv
+
+# Go
+.vscode
+.idea
+*.swp
+*.swo
+*~
+
+# Build outputs
+bin/
+dist/
+build/
+
+# Documentation
+docs/
+README.md
+LICENSE
+
+# Test files
+*_test.go
+coverage.out
+coverage.html
+
+# Docker
+Dockerfile
+docker-compose.yml
+.dockerignore
+
+# OS files
+.DS_Store
+Thumbs.db
