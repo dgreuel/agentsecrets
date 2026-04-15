@@ -19,6 +19,7 @@ var (
 	authService      *auth.Service
 	workspaceService *workspaces.Service
 	apiClient        *api.Client
+	apiURL           string // Global flag: --api-url (highest precedence)
 )
 
 // rootCmd is the base command when called without any subcommands
@@ -56,10 +57,20 @@ func Execute() error {
 }
 
 func init() {
+	// Add global flags
+	rootCmd.PersistentFlags().StringVar(&apiURL, "api-url", "", "API base URL (overrides AGENTSECRETS_API_URL and config)")
+
+	// Resolve API URL with precedence: CLI flag > env var > config > default
+	resolvedURL := apiURL // CLI flag has highest precedence
+	if resolvedURL == "" {
+		resolvedURL = config.ResolveAPIBaseURL()
+	}
+
 	// Create the API client with a token provider function.
 	apiClient = api.NewClient(func() string {
 		return config.GetAccessToken()
 	})
+	apiClient.BaseURL = resolvedURL
 
 	// Create the shared services
 	authService = auth.NewService(apiClient)
@@ -72,7 +83,7 @@ func init() {
 	rootCmd.AddCommand(loginCmd)
 	rootCmd.AddCommand(logoutCmd)
 	rootCmd.AddCommand(statusCmd)
-	
+
 	// Add auth middleware to commands that require it
 	workspaceCmd.PersistentPreRunE = authService.EnsureAuth
 	projectCmd.PersistentPreRunE = authService.EnsureAuth

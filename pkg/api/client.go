@@ -15,7 +15,8 @@ import (
 	"time"
 )
 
-// DefaultBaseURL is the SecretsCLI API endpoint
+// DefaultBaseURL is the default SecretsCLI API endpoint.
+// Can be overridden via AGENTSECRETS_API_URL env var or config.APIBaseURL.
 const DefaultBaseURL = "https://secrets-api-orpin.vercel.app/api"
 
 // endpointMap defines all API routes, matching the Python ENDPOINT_MAP exactly

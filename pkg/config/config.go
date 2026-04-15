@@ -36,6 +36,7 @@ type GlobalConfig struct {
 	LocalAuthSalt  string `json:"local_auth_salt,omitempty"`
 	LocalAuthToken string `json:"local_auth_token,omitempty"`
 	DefaultStorageMode int   `json:"default_storage_mode"` // 1 = keychain (default), 2 = env_file
+	APIBaseURL     string `json:"api_base_url,omitempty"` // Override backend API URL; precedence: CLI flag > env var > this config > default
 	LastUpdateCheck    int64 `json:"last_update_check,omitempty"`
 	LatestVersion      string `json:"latest_version,omitempty"`
 }
@@ -608,5 +609,43 @@ func SetSelectedEnvironment(env string) error {
 		c = &GlobalConfig{}
 	}
 	c.SelectedEnvironment = env
+	return SaveGlobalConfig(c)
+}
+
+// ResolveAPIBaseURL returns the API base URL with the following precedence:
+// 1. AGENTSECRETS_API_URL environment variable
+// 2. ~/.agentsecrets/config.json api_base_url
+// 3. Default hardcoded URL
+func ResolveAPIBaseURL() string {
+	url, _ := ResolveAPIBaseURLWithSource()
+	return url
+}
+
+// ResolveAPIBaseURLWithSource returns the API base URL and its source.
+// Sources: "AGENTSECRETS_API_URL", "global config", "default"
+func ResolveAPIBaseURLWithSource() (string, string) {
+	const defaultURL = "https://secrets-api-orpin.vercel.app/api"
+
+	// 1. Check env var
+	if url := os.Getenv("AGENTSECRETS_API_URL"); url != "" {
+		return url, "AGENTSECRETS_API_URL"
+	}
+
+	// 2. Check global config
+	if c, err := LoadGlobalConfig(); err == nil && c != nil && c.APIBaseURL != "" {
+		return c.APIBaseURL, "global config"
+	}
+
+	// 3. Default
+	return defaultURL, "default"
+}
+
+// SetAPIBaseURL updates the stored API base URL in the global config.
+func SetAPIBaseURL(url string) error {
+	c, _ := LoadGlobalConfig()
+	if c == nil {
+		c = &GlobalConfig{}
+	}
+	c.APIBaseURL = url
 	return SaveGlobalConfig(c)
 }
