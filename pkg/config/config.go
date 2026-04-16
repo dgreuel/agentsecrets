@@ -35,8 +35,9 @@ type GlobalConfig struct {
 	// without a network round-trip.  The server never sees these values.
 	LocalAuthSalt  string `json:"local_auth_salt,omitempty"`
 	LocalAuthToken string `json:"local_auth_token,omitempty"`
-	DefaultStorageMode int   `json:"default_storage_mode"` // 1 = keychain (default), 2 = env_file
-	APIBaseURL     string `json:"api_base_url,omitempty"` // Override backend API URL; precedence: CLI flag > env var > this config > default
+	DefaultStorageMode int    `json:"default_storage_mode"`   // 1 = keychain (default), 2 = env_file, 3 = 1password
+	OnePasswordVault   string `json:"onepassword_vault,omitempty"` // Vault name for storage mode 3
+	APIBaseURL         string `json:"api_base_url,omitempty"` // Override backend API URL; precedence: CLI flag > env var > this config > default
 	LastUpdateCheck    int64 `json:"last_update_check,omitempty"`
 	LatestVersion      string `json:"latest_version,omitempty"`
 }
@@ -497,10 +498,14 @@ func ClearProjectConfig() error {
 func GetStorageMode() int {
 	// 1. Env var
 	if env := os.Getenv("AGENTSECRETS_STORAGE_MODE"); env != "" {
-		if env == "2" {
+		switch env {
+		case "2":
 			return 2
+		case "3":
+			return 3
+		default:
+			return 1
 		}
-		return 1
 	}
 
 	// 2. Project config
@@ -523,6 +528,25 @@ func SetStorageMode(mode int) error {
 		c = &GlobalConfig{}
 	}
 	c.DefaultStorageMode = mode
+	return SaveGlobalConfig(c)
+}
+
+// GetOnePasswordVault returns the configured 1Password vault name, or "AgentSecrets" as default.
+func GetOnePasswordVault() string {
+	c, err := LoadGlobalConfig()
+	if err != nil || c.OnePasswordVault == "" {
+		return "AgentSecrets"
+	}
+	return c.OnePasswordVault
+}
+
+// SetOnePasswordVault stores the 1Password vault name in the global config.
+func SetOnePasswordVault(vault string) error {
+	c, _ := LoadGlobalConfig()
+	if c == nil {
+		c = &GlobalConfig{}
+	}
+	c.OnePasswordVault = vault
 	return SaveGlobalConfig(c)
 }
 

@@ -10,6 +10,7 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/The-17/agentsecrets/pkg/auth"
+	"github.com/The-17/agentsecrets/pkg/backends/onepassword"
 	"github.com/The-17/agentsecrets/pkg/config"
 	"github.com/The-17/agentsecrets/pkg/ui"
 )
@@ -54,20 +55,28 @@ func runInit(cmd *cobra.Command, args []string) error {
 		// First-ever run: prompt for storage mode unless flag passed
 		modeToUse = storageMode
 		if !cmd.Flags().Changed("storage-mode") {
+			options := []huh.Option[string]{
+				huh.NewOption("1. Keychain only (recommended) — values never written to disk.\n   .env.example created with key names only.", "1"),
+				huh.NewOption("2. .env file — plaintext file, compatible with all existing tooling.", "2"),
+			}
+			if onepassword.IsAvailable() {
+				options = append(options, huh.NewOption("3. 1Password — store secrets in your 1Password vault.\n   Run 'agentsecrets 1password setup' after init to choose a vault.", "3"))
+			}
+
 			var modeChoice string
 			err := huh.NewSelect[string]().
 				Title("How would you like secrets to be stored locally by default?").
-				Options(
-					huh.NewOption("1. Keychain only (recommended) — values never written to disk.\n   .env.example created with key names only.", "1"),
-					huh.NewOption("2. .env file — plaintext file, compatible with all existing tooling.", "2"),
-				).
+				Options(options...).
 				Value(&modeChoice).
 				Run()
-			
+
 			if err == nil {
-				if modeChoice == "2" {
+				switch modeChoice {
+				case "2":
 					modeToUse = 2
-				} else {
+				case "3":
+					modeToUse = 3
+				default:
 					modeToUse = 1
 				}
 			}

@@ -1,15 +1,17 @@
 package commands
 
 import (
+	"fmt"
+
 	"github.com/charmbracelet/lipgloss"
 	"github.com/spf13/cobra"
 
 	"github.com/The-17/agentsecrets/pkg/api"
 	"github.com/The-17/agentsecrets/pkg/auth"
 	"github.com/The-17/agentsecrets/pkg/config"
+	"github.com/The-17/agentsecrets/pkg/keyring"
 	"github.com/The-17/agentsecrets/pkg/ui"
 	"github.com/The-17/agentsecrets/pkg/workspaces"
-	"fmt"
 )
 
 // Version is set at build time via ldflags
@@ -72,6 +74,11 @@ func init() {
 	})
 	apiClient.BaseURL = resolvedURL
 
+	// Enable 1Password backend if storage mode 3 is configured.
+	if config.GetStorageMode() == 3 {
+		keyring.Configure1Password(config.GetOnePasswordVault())
+	}
+
 	// Create the shared services
 	authService = auth.NewService(apiClient)
 	workspaceService = workspaces.NewService(apiClient)
@@ -102,4 +109,5 @@ func init() {
 	rootCmd.AddCommand(environmentCmd)
 	rootCmd.AddCommand(NewEnvCmd())
 	rootCmd.AddCommand(NewExecCmd())
+	rootCmd.AddCommand(opCmd)
 }

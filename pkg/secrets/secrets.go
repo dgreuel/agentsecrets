@@ -276,7 +276,7 @@ func (s *Service) Push() error {
 	var localSecrets map[string]string
 	env := config.ResolveEnvironment()
 
-	if config.GetStorageMode() == 1 {
+	if config.GetStorageMode() != 2 {
 		localSecrets, err = keyring.GetAllProjectSecrets(project.ProjectID, env)
 	} else {
 		localSecrets, err = s.Env.Read()
@@ -404,7 +404,7 @@ func (s *Service) Diff(fromEnv, toEnv string) (*DiffResult, error) {
 		}
 	} else {
 		// Source is Local
-		if config.GetStorageMode() == 1 {
+		if config.GetStorageMode() != 2 {
 			project, _ := config.LoadProjectConfig()
 			env := config.ResolveEnvironment()
 			source, err = keyring.GetAllProjectSecrets(project.ProjectID, env)

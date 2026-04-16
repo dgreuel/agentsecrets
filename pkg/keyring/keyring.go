@@ -19,12 +19,33 @@ import (
 	"strings"
 
 	gokeyring "github.com/zalando/go-keyring"
+
+	"github.com/The-17/agentsecrets/pkg/backends/onepassword"
 )
 
 const serviceName = "AgentSecrets"
 
 // useFileBackend is true when the OS keyring is unavailable (WSL, headless Linux, etc.)
 var useFileBackend bool
+
+// use1PasswordBackend is true when storage mode 3 (1Password) is active.
+// Set via Configure1Password — never in init(), to avoid import-order issues.
+var use1PasswordBackend bool
+var opClient *onepassword.Client
+
+// Configure1Password enables the 1Password backend for all secret operations.
+// Call this once at startup when storage mode 3 is configured.
+// Keypair and allowlist operations always use the OS keyring regardless of this setting.
+func Configure1Password(vault string) {
+	if !onepassword.IsAvailable() {
+		// Mark as requested so callers get a clear error rather than a silent fallback.
+		use1PasswordBackend = true
+		opClient = nil
+		return
+	}
+	use1PasswordBackend = true
+	opClient = onepassword.NewClient(vault)
+}
 
 func init() {
 	// On Linux, test if the keyring actually works. If not, fall back to file storage.
@@ -202,6 +223,13 @@ func secretKeyName(projectID, environment, key string) string {
 
 // SetSecret stores a decrypted secret in the keyring and updates the project environment's key index.
 func SetSecret(projectID, environment, key, value string) error {
+	if use1PasswordBackend {
+		if opClient == nil {
+			return fmt.Errorf("1Password CLI (op) is not installed — run 'agentsecrets 1password setup'")
+		}
+		return opClient.SetSecret(projectID, environment, key, value)
+	}
+
 	name := secretKeyName(projectID, environment, key)
 	if useFileBackend {
 		// Base64-encode before storing so fileGetKey's decode round-trips correctly.
@@ -219,6 +247,13 @@ func SetSecret(projectID, environment, key, value string) error {
 
 // GetSecret retrieves a secret from the keyring.
 func GetSecret(projectID, environment, key string) (string, error) {
+	if use1PasswordBackend {
+		if opClient == nil {
+			return "", fmt.Errorf("1Password CLI (op) is not installed — run 'agentsecrets 1password setup'")
+		}
+		return opClient.GetSecret(projectID, environment, key)
+	}
+
 	name := secretKeyName(projectID, environment, key)
 	legacyName := fmt.Sprintf("Secret_%s_%s", projectID, key)
 
@@ -244,6 +279,13 @@ func GetSecret(projectID, environment, key string) (string, error) {
 
 // DeleteSecret removes a secret from the keyring and its index.
 func DeleteSecret(projectID, environment, key string) error {
+	if use1PasswordBackend {
+		if opClient == nil {
+			return fmt.Errorf("1Password CLI (op) is not installed — run 'agentsecrets 1password setup'")
+		}
+		return opClient.DeleteSecret(projectID, environment, key)
+	}
+
 	name := secretKeyName(projectID, environment, key)
 	legacyName := fmt.Sprintf("Secret_%s_%s", projectID, key)
 
@@ -400,6 +442,13 @@ func removeKeyFromIndex(projectID, environment, key string) error {
 
 // GetAllProjectSecrets returns all secrets mapped for a specific project and environment from the keyring.
 func GetAllProjectSecrets(projectID, environment string) (map[string]string, error) {
+	if use1PasswordBackend {
+		if opClient == nil {
+			return nil, fmt.Errorf("1Password CLI (op) is not installed — run 'agentsecrets 1password setup'")
+		}
+		return opClient.GetAllSecrets(projectID, environment)
+	}
+
 	keys := getProjectKeys(projectID, environment)
 	res := make(map[string]string)
 
