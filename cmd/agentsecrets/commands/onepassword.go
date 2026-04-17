@@ -108,7 +108,22 @@ func runOPSetup(cmd *cobra.Command, args []string) error {
 		return nil // user cancelled
 	}
 
-	// 5. Persist the vault choice and enable mode 3.
+	// 5. Verify write access before committing to this vault.
+	ui.Info(fmt.Sprintf("Checking write access to %q...", selectedVault))
+	testClient := onepassword.NewClient(selectedVault)
+	if err := testClient.CheckVaultWritable(); err != nil {
+		fmt.Println()
+		ui.Error("Cannot write to that vault:")
+		fmt.Println("  " + err.Error())
+		fmt.Println()
+		fmt.Println("  To create a vault you own:")
+		fmt.Println("    op vault create \"AgentSecrets\"")
+		fmt.Println("  Then re-run: agentsecrets 1password setup")
+		return fmt.Errorf("vault not writable")
+	}
+	ui.Success(fmt.Sprintf("Write access confirmed for %q", selectedVault))
+
+	// 6. Persist the vault choice and enable mode 3.
 	if err := config.SetOnePasswordVault(selectedVault); err != nil {
 		return fmt.Errorf("save vault: %w", err)
 	}

@@ -117,6 +117,9 @@ func (c *Client) SetSecret(projectID, environment, key, value string) error {
 		fieldAssignment,
 	)
 	if createErr != nil {
+		if strings.Contains(createErr.Error(), "(101)") {
+			return fmt.Errorf("no write permission for vault %q — run 'agentsecrets 1password setup' and choose a vault you own", c.Vault)
+		}
 		return fmt.Errorf("1password set %q: edit: %v, create: %w", key, err, createErr)
 	}
 	return nil
@@ -132,7 +135,27 @@ func (c *Client) DeleteSecret(projectID, environment, key string) error {
 	return nil
 }
 
-// opListItem is a minimal representation of a 1Password item from op item list.
+// CheckVaultWritable verifies that the current account can create items in the vault.
+// It creates a temporary item and immediately deletes it.
+func (c *Client) CheckVaultWritable() error {
+	testTitle := "agentsecrets/__write_test__"
+	_, err := runOP("item", "create",
+		"--category=password",
+		"--title="+testTitle,
+		"--vault="+c.Vault,
+		"password=test",
+	)
+	if err != nil {
+		if strings.Contains(err.Error(), "(101)") {
+			return fmt.Errorf("no write permission for vault %q — you need Editor or higher access.\nCreate a personal vault with: op vault create \"AgentSecrets\"", c.Vault)
+		}
+		return fmt.Errorf("vault %q write test failed: %w", c.Vault, err)
+	}
+	_, _ = runOP("item", "delete", testTitle, "--vault="+c.Vault)
+	return nil
+}
+
+
 type opListItem struct {
 	Title string `json:"title"`
 }
