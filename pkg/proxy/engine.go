@@ -97,7 +97,7 @@ func NewEngine(projectID string) (*Engine, error) {
 			Timeout: DefaultTimeout,
 		},
 		ResolveSecret: func(key string) (string, error) {
-			return keyring.GetSecret(projectID, resolveEnvForAudit(), key)
+			return keyring.GetSecret(projectID, pc.ProjectName, resolveEnvForAudit(), key)
 		},
 	}, nil
 }

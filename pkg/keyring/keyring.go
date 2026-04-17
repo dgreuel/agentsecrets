@@ -221,13 +221,24 @@ func secretKeyName(projectID, environment, key string) string {
 	return fmt.Sprintf("%s:%s:%s", projectID, environment, key)
 }
 
-// SetSecret stores a decrypted secret in the keyring and updates the project environment's key index.
-func SetSecret(projectID, environment, key, value string) error {
+// nameOrID returns projectName when non-empty, otherwise falls back to projectID.
+// Used so 1Password item titles use the human-readable project name.
+func nameOrID(projectID, projectName string) string {
+	if projectName != "" {
+		return projectName
+	}
+	return projectID
+}
+
+// SetSecret stores a decrypted secret in the keyring.
+// projectName is used for the 1Password item title; projectID is used for all
+// other backends and is unchanged for backward compatibility.
+func SetSecret(projectID, projectName, environment, key, value string) error {
 	if use1PasswordBackend {
 		if opClient == nil {
 			return fmt.Errorf("1Password CLI (op) is not installed — run 'agentsecrets 1password setup'")
 		}
-		return opClient.SetSecret(projectID, environment, key, value)
+		return opClient.SetSecret(nameOrID(projectID, projectName), environment, key, value)
 	}
 
 	name := secretKeyName(projectID, environment, key)
@@ -246,12 +257,13 @@ func SetSecret(projectID, environment, key, value string) error {
 }
 
 // GetSecret retrieves a secret from the keyring.
-func GetSecret(projectID, environment, key string) (string, error) {
+// projectName is used for the 1Password item title; projectID is used for all other backends.
+func GetSecret(projectID, projectName, environment, key string) (string, error) {
 	if use1PasswordBackend {
 		if opClient == nil {
 			return "", fmt.Errorf("1Password CLI (op) is not installed — run 'agentsecrets 1password setup'")
 		}
-		return opClient.GetSecret(projectID, environment, key)
+		return opClient.GetSecret(nameOrID(projectID, projectName), environment, key)
 	}
 
 	name := secretKeyName(projectID, environment, key)
@@ -268,7 +280,7 @@ func GetSecret(projectID, environment, key string) (string, error) {
 	if val, err := readKey(name); err == nil {
 		return val, nil
 	}
-	
+
 	if environment == "development" || environment == "" {
 		if val, err := readKey(legacyName); err == nil {
 			return val, nil
@@ -278,12 +290,13 @@ func GetSecret(projectID, environment, key string) (string, error) {
 }
 
 // DeleteSecret removes a secret from the keyring and its index.
-func DeleteSecret(projectID, environment, key string) error {
+// projectName is used for the 1Password item title; projectID is used for all other backends.
+func DeleteSecret(projectID, projectName, environment, key string) error {
 	if use1PasswordBackend {
 		if opClient == nil {
 			return fmt.Errorf("1Password CLI (op) is not installed — run 'agentsecrets 1password setup'")
 		}
-		return opClient.DeleteSecret(projectID, environment, key)
+		return opClient.DeleteSecret(nameOrID(projectID, projectName), environment, key)
 	}
 
 	name := secretKeyName(projectID, environment, key)
@@ -440,23 +453,58 @@ func removeKeyFromIndex(projectID, environment, key string) error {
 	return saveProjectKeys(projectID, environment, newKeys)
 }
 
-// GetAllProjectSecrets returns all secrets mapped for a specific project and environment from the keyring.
-func GetAllProjectSecrets(projectID, environment string) (map[string]string, error) {
+// GetAllProjectSecrets returns all secrets for a project+environment from the keyring.
+// projectName is used for the 1Password item title; projectID is used for all other backends.
+func GetAllProjectSecrets(projectID, projectName, environment string) (map[string]string, error) {
 	if use1PasswordBackend {
 		if opClient == nil {
 			return nil, fmt.Errorf("1Password CLI (op) is not installed — run 'agentsecrets 1password setup'")
 		}
-		return opClient.GetAllSecrets(projectID, environment)
+		return opClient.GetAllSecrets(nameOrID(projectID, projectName), environment)
 	}
 
 	keys := getProjectKeys(projectID, environment)
 	res := make(map[string]string)
 
 	for _, k := range keys {
-		if val, err := GetSecret(projectID, environment, k); err == nil {
+		if val, err := GetSecret(projectID, projectName, environment, k); err == nil {
 			res[k] = val
 		}
 	}
 	return res, nil
 }
 
+// --- 1Password Service Account Token Storage ---
+// Stored in the OS keychain (not in 1Password itself) so the credential needed
+// to authenticate with 1Password is kept in a separate, independent store.
+
+const opTokenKeyName = "op_service_account_token"
+
+// StoreOPToken saves the 1Password service account token in the OS keychain.
+func StoreOPToken(token string) error {
+	if useFileBackend {
+		encoded := base64.StdEncoding.EncodeToString([]byte(token))
+		return fileSet(opTokenKeyName, encoded, "")
+	}
+	if err := gokeyring.Set(serviceName, opTokenKeyName, token); err != nil {
+		return fmt.Errorf("store op token: %w", err)
+	}
+	return nil
+}
+
+// GetOPToken retrieves the stored 1Password service account token from the OS keychain.
+func GetOPToken() (string, error) {
+	if useFileBackend {
+		val, err := fileGetKey(opTokenKeyName, "private")
+		return string(val), err
+	}
+	return gokeyring.Get(serviceName, opTokenKeyName)
+}
+
+// DeleteOPToken removes the stored 1Password service account token from the OS keychain.
+func DeleteOPToken() error {
+	if useFileBackend {
+		return fileDelete(opTokenKeyName)
+	}
+	return gokeyring.Delete(serviceName, opTokenKeyName)
+}

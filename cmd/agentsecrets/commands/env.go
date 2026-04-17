@@ -50,7 +50,7 @@ func runEnv(cmd *cobra.Command, args []string) error {
 
 	// Resolve all secrets from keychain
 	envName := config.ResolveEnvironment()
-	secrets, err := keyring.GetAllProjectSecrets(project.ProjectID, envName)
+	secrets, err := keyring.GetAllProjectSecrets(project.ProjectID, project.ProjectName, envName)
 	if err != nil {
 		return fmt.Errorf("failed to load secrets from keychain: %w", err)
 	}

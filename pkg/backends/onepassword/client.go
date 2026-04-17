@@ -69,14 +69,15 @@ func ListVaults() ([]string, error) {
 }
 
 // itemTitle constructs the 1Password item title for a given secret.
-// Format: agentsecrets/{projectID}/{environment}/{key}
-func itemTitle(projectID, environment, key string) string {
-	return fmt.Sprintf("agentsecrets/%s/%s/%s", projectID, environment, key)
+// projectRef is the human-readable project name (or ID as fallback).
+// Format: agentsecrets/{projectRef}/{environment}/{key}
+func itemTitle(projectRef, environment, key string) string {
+	return fmt.Sprintf("agentsecrets/%s/%s/%s", projectRef, environment, key)
 }
 
 // itemPrefix returns the title prefix for all secrets in a project+environment.
-func itemPrefix(projectID, environment string) string {
-	return fmt.Sprintf("agentsecrets/%s/%s/", projectID, environment)
+func itemPrefix(projectRef, environment string) string {
+	return fmt.Sprintf("agentsecrets/%s/%s/", projectRef, environment)
 }
 
 // GetSecret retrieves a secret value from 1Password.

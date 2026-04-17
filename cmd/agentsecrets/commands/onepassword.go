@@ -2,9 +2,11 @@ package commands
 
 import (
 	"fmt"
+	"strings"
 
 	"github.com/charmbracelet/huh"
 	"github.com/spf13/cobra"
+	"golang.org/x/term"
 
 	"github.com/The-17/agentsecrets/pkg/backends/onepassword"
 	"github.com/The-17/agentsecrets/pkg/config"
@@ -39,9 +41,35 @@ var opVerifyCmd = &cobra.Command{
 	RunE:  runOPVerify,
 }
 
+var opTokenCmd = &cobra.Command{
+	Use:   "token",
+	Short: "Manage the stored 1Password service account token",
+	Long: `Store or remove a 1Password service account token in the OS keychain.
+
+When a token is stored, AgentSecrets automatically sets OP_SERVICE_ACCOUNT_TOKEN
+before calling the op CLI, so you don't need to keep it in your shell environment.
+This is most useful for CI-free interactive setups where you want unattended access
+without adding the token to .zshrc / .bashrc.`,
+}
+
+var opTokenSetCmd = &cobra.Command{
+	Use:   "set",
+	Short: "Save a 1Password service account token to the OS keychain",
+	RunE:  runOPTokenSet,
+}
+
+var opTokenDeleteCmd = &cobra.Command{
+	Use:   "delete",
+	Short: "Remove the stored 1Password service account token from the OS keychain",
+	RunE:  runOPTokenDelete,
+}
+
 func init() {
+	opTokenCmd.AddCommand(opTokenSetCmd)
+	opTokenCmd.AddCommand(opTokenDeleteCmd)
 	opCmd.AddCommand(opSetupCmd)
 	opCmd.AddCommand(opVerifyCmd)
+	opCmd.AddCommand(opTokenCmd)
 }
 
 func runOPSetup(cmd *cobra.Command, args []string) error {
@@ -198,6 +226,13 @@ func runOPVerify(cmd *cobra.Command, args []string) error {
 		allOK = false
 	}
 
+	// Stored token
+	if _, err := keyring.GetOPToken(); err == nil {
+		ui.StatusRow("Saved token", "present in OS keychain (auto-injected as OP_SERVICE_ACCOUNT_TOKEN)")
+	} else {
+		ui.StatusRow("Saved token", "none — use 'agentsecrets 1password token set' to save one")
+	}
+
 	fmt.Println()
 	if allOK {
 		ui.Success("1Password integration is correctly configured.")
@@ -205,5 +240,38 @@ func runOPVerify(cmd *cobra.Command, args []string) error {
 		ui.Error("One or more checks failed. See details above.")
 		return fmt.Errorf("verification failed")
 	}
+	return nil
+}
+
+func runOPTokenSet(cmd *cobra.Command, args []string) error {
+	// Prompt for the token without echoing it to the terminal.
+	// We use golang.org/x/term directly because huh's EchoModePassword still
+	// echoes bullet characters, which is fine for passwords but leaky for tokens.
+	fmt.Print("1Password service account token: ")
+	raw, err := term.ReadPassword(0)
+	fmt.Println()
+	if err != nil {
+		return fmt.Errorf("read token: %w", err)
+	}
+
+	token := strings.TrimSpace(string(raw))
+	if token == "" {
+		return fmt.Errorf("token cannot be empty")
+	}
+
+	if err := keyring.StoreOPToken(token); err != nil {
+		return fmt.Errorf("store token: %w", err)
+	}
+
+	ui.Success("Service account token saved to OS keychain.")
+	ui.Info("AgentSecrets will automatically set OP_SERVICE_ACCOUNT_TOKEN on each run.")
+	return nil
+}
+
+func runOPTokenDelete(cmd *cobra.Command, args []string) error {
+	if err := keyring.DeleteOPToken(); err != nil {
+		return fmt.Errorf("delete token: %w", err)
+	}
+	ui.Success("Service account token removed from OS keychain.")
 	return nil
 }

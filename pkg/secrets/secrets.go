@@ -61,7 +61,7 @@ func (s *Service) BatchSet(kv map[string]string, environment string) error {
 		apiSecrets[k] = encryptedValue
 
 		// 2. Store in OS Keychain (for Proxy support)
-		_ = keyring.SetSecret(project.ProjectID, env, k, v)
+		_ = keyring.SetSecret(project.ProjectID, project.ProjectName, env, k, v)
 	}
 
 	// 3. Sync to cloud (Single bulk call with dictionary)
@@ -101,7 +101,7 @@ func (s *Service) BatchSetLocal(kv map[string]string, env string) error {
 	}
 
 	for k, v := range kv {
-		_ = keyring.SetSecret(project.ProjectID, env, k, v)
+		_ = keyring.SetSecret(project.ProjectID, project.ProjectName, env, k, v)
 	}
 	
 	// We only write to .env if the environment matches the current active one
@@ -123,7 +123,7 @@ func (s *Service) Get(key string) (string, error) {
 	env := config.ResolveEnvironment()
 
 	// Try keychain first (fast paths)
-	if val, err := keyring.GetSecret(project.ProjectID, env, key); err == nil {
+	if val, err := keyring.GetSecret(project.ProjectID, project.ProjectName, env, key); err == nil {
 		return val, nil
 	}
 
@@ -162,7 +162,7 @@ func (s *Service) Get(key string) (string, error) {
 	}
 
 	// Cache in keychain
-	_ = keyring.SetSecret(project.ProjectID, env, key, plaintext)
+	_ = keyring.SetSecret(project.ProjectID, project.ProjectName, env, key, plaintext)
 
 	return plaintext, nil
 }
@@ -248,7 +248,7 @@ func (s *Service) Pull(targetKeys []string) error {
 			continue
 		}
 		secretsMap[s.Key] = plaintext
-		if setErr := keyring.SetSecret(project.ProjectID, env, s.Key, plaintext); setErr != nil && mode == 3 {
+		if setErr := keyring.SetSecret(project.ProjectID, project.ProjectName, env, s.Key, plaintext); setErr != nil && mode == 3 {
 			return fmt.Errorf("pull: write %q to 1Password: %w", s.Key, setErr)
 		}
 	}
@@ -280,7 +280,7 @@ func (s *Service) Push() error {
 	env := config.ResolveEnvironment()
 
 	if config.GetStorageMode() != 2 {
-		localSecrets, err = keyring.GetAllProjectSecrets(project.ProjectID, env)
+		localSecrets, err = keyring.GetAllProjectSecrets(project.ProjectID, project.ProjectName, env)
 	} else {
 		localSecrets, err = s.Env.Read()
 	}
@@ -307,7 +307,7 @@ func (s *Service) Push() error {
 		apiSet[k] = encrypted
 		
 		// 1. Sync to keychain
-		_ = keyring.SetSecret(project.ProjectID, env, k, v)
+		_ = keyring.SetSecret(project.ProjectID, project.ProjectName, env, k, v)
 	}
 
 	// 2. Sync to cloud (Bulk dictionary format)
@@ -364,7 +364,7 @@ func (s *Service) Delete(key string) error {
 	}
 
 	// 3. Delete from Keychain
-	_ = keyring.DeleteSecret(project.ProjectID, env, key)
+	_ = keyring.DeleteSecret(project.ProjectID, project.ProjectName, env, key)
 
 	_ = s.UpdateEnvExample()
 	return nil
@@ -410,7 +410,7 @@ func (s *Service) Diff(fromEnv, toEnv string) (*DiffResult, error) {
 		if config.GetStorageMode() != 2 {
 			project, _ := config.LoadProjectConfig()
 			env := config.ResolveEnvironment()
-			source, err = keyring.GetAllProjectSecrets(project.ProjectID, env)
+			source, err = keyring.GetAllProjectSecrets(project.ProjectID, project.ProjectName, env)
 		} else {
 			source, err = s.Env.Read()
 		}

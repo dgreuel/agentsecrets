@@ -2,6 +2,7 @@ package commands
 
 import (
 	"fmt"
+	"os"
 
 	"github.com/charmbracelet/lipgloss"
 	"github.com/spf13/cobra"
@@ -73,6 +74,14 @@ func init() {
 		return config.GetAccessToken()
 	})
 	apiClient.BaseURL = resolvedURL
+
+	// Inject the stored 1Password service account token before any op CLI call.
+	// Only done when the env var isn't already present so explicit env vars win.
+	if os.Getenv("OP_SERVICE_ACCOUNT_TOKEN") == "" {
+		if token, err := keyring.GetOPToken(); err == nil && token != "" {
+			os.Setenv("OP_SERVICE_ACCOUNT_TOKEN", token)
+		}
+	}
 
 	// Enable 1Password backend if storage mode 3 is configured.
 	if config.GetStorageMode() == 3 {
