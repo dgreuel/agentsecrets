@@ -237,6 +237,7 @@ func (s *Service) Pull(targetKeys []string) error {
 
 	project, _ := config.LoadProjectConfig()
 	env := config.ResolveEnvironment()
+	mode := config.GetStorageMode()
 	secretsMap := make(map[string]string)
 	for _, s := range secrets {
 		if isSelective && !filter[s.Key] {
@@ -247,7 +248,9 @@ func (s *Service) Pull(targetKeys []string) error {
 			continue
 		}
 		secretsMap[s.Key] = plaintext
-		_ = keyring.SetSecret(project.ProjectID, env, s.Key, plaintext)
+		if setErr := keyring.SetSecret(project.ProjectID, env, s.Key, plaintext); setErr != nil && mode == 3 {
+			return fmt.Errorf("pull: write %q to 1Password: %w", s.Key, setErr)
+		}
 	}
 
 	if isSelective && len(secretsMap) == 0 {

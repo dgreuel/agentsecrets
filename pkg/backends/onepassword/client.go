@@ -97,7 +97,7 @@ func (c *Client) GetSecret(projectID, environment, key string) (string, error) {
 // It attempts an edit first; if the item does not exist, it creates it.
 func (c *Client) SetSecret(projectID, environment, key, value string) error {
 	title := itemTitle(projectID, environment, key)
-	fieldAssignment := "password[password]=" + value
+	fieldAssignment := "password=" + value
 
 	// Try editing the existing item first (common case for updates).
 	_, err := runOP("item", "edit", title,
@@ -138,12 +138,13 @@ type opListItem struct {
 }
 
 // ListSecretKeys returns the secret key names for a project+environment.
+// It lists all items in the vault and filters by title prefix, avoiding
+// any dependency on tag indexing which varies across op CLI versions.
 func (c *Client) ListSecretKeys(projectID, environment string) ([]string, error) {
 	prefix := itemPrefix(projectID, environment)
 
 	out, err := runOP("item", "list",
 		"--vault="+c.Vault,
-		"--tags=agentsecrets",
 		"--format=json",
 	)
 	if err != nil {

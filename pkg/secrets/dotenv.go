@@ -101,9 +101,9 @@ func (m *EnvManager) parseValue(val string) string {
 }
 
 // Write merges the provided secrets into the environment-specific .env file.
+// Only active in mode 2 (.env file); modes 1 and 3 keep secrets off disk.
 func (m *EnvManager) Write(newSecrets map[string]string) error {
-	mode := config.GetStorageMode()
-	if mode != 1 {
+	if config.GetStorageMode() == 2 {
 		if err := m.updateFile(m.EnvPath, newSecrets, false); err != nil {
 			return err
 		}
@@ -173,9 +173,9 @@ func (m *EnvManager) updateFile(path string, newSecrets map[string]string, keysO
 }
 
 // Delete removes a key from the environment file.
+// Only active in mode 2; modes 1 and 3 do not write to disk.
 func (m *EnvManager) Delete(key string) error {
-	mode := config.GetStorageMode()
-	if mode != 1 {
+	if config.GetStorageMode() == 2 {
 		if err := m.removeFromFile(m.EnvPath, key); err != nil {
 			return err
 		}
