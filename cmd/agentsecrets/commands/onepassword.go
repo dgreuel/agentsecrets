@@ -115,6 +115,9 @@ func runOPSetup(cmd *cobra.Command, args []string) error {
 	if err := config.SetStorageMode(3); err != nil {
 		return fmt.Errorf("set storage mode: %w", err)
 	}
+	// Also update project-level config: GetStorageMode() checks project.json before
+	// the global config, so without this the project setting (1) always wins.
+	_ = config.SetProjectStorageMode(3)
 
 	// 6. Wire the backend for this process so verify works immediately.
 	keyring.Configure1Password(selectedVault)
@@ -177,6 +180,7 @@ func runOPVerify(cmd *cobra.Command, args []string) error {
 		ui.StatusRow("Storage mode", "3 (1Password) ✓")
 	} else {
 		ui.StatusRow("Storage mode", fmt.Sprintf("%d — run 'agentsecrets 1password setup' to switch to mode 3", mode))
+		allOK = false
 	}
 
 	fmt.Println()
