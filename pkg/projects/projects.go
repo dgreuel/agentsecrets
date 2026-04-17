@@ -25,12 +25,12 @@ type Project struct {
 
 // Service handles project orchestration
 type Service struct {
-	API *api.Client
+	API api.Backend
 }
 
 // NewService creates a new project service
-func NewService(client *api.Client) *Service {
-	return &Service{API: client}
+func NewService(backend api.Backend) *Service {
+	return &Service{API: backend}
 }
 
 // List returns all projects for the currently selected workspace

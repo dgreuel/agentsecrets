@@ -8,6 +8,7 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/The-17/agentsecrets/pkg/api"
+	"github.com/The-17/agentsecrets/pkg/api/offline"
 	"github.com/The-17/agentsecrets/pkg/auth"
 	"github.com/The-17/agentsecrets/pkg/config"
 	"github.com/The-17/agentsecrets/pkg/keyring"
@@ -21,8 +22,9 @@ var Version = "dev"
 var (
 	authService      *auth.Service
 	workspaceService *workspaces.Service
-	apiClient        *api.Client
+	apiClient        api.Backend
 	apiURL           string // Global flag: --api-url (highest precedence)
+	offlineFlag      bool   // Global flag: --offline (forces in-process backend)
 )
 
 // rootCmd is the base command when called without any subcommands
@@ -62,18 +64,41 @@ func Execute() error {
 func init() {
 	// Add global flags
 	rootCmd.PersistentFlags().StringVar(&apiURL, "api-url", "", "API base URL (overrides AGENTSECRETS_API_URL and config)")
+	rootCmd.PersistentFlags().BoolVar(&offlineFlag, "offline", false, "Run with the in-process SQLite backend (no network)")
 
-	// Resolve API URL with precedence: CLI flag > env var > config > default
-	resolvedURL := apiURL // CLI flag has highest precedence
-	if resolvedURL == "" {
-		resolvedURL = config.ResolveAPIBaseURL()
+	// The flag value isn't bound until Cobra parses argv, but several callers
+	// (init() bodies in subcommand files, the global services below) resolve
+	// the mode immediately. Sniff os.Args directly so we get the right answer
+	// before Cobra runs.
+	for _, a := range os.Args[1:] {
+		if a == "--offline" {
+			config.SetModeOverride(config.ModeOffline)
+			offlineFlag = true
+			break
+		}
 	}
 
-	// Create the API client with a token provider function.
-	apiClient = api.NewClient(func() string {
-		return config.GetAccessToken()
-	})
-	apiClient.BaseURL = resolvedURL
+	// Build the backend. Offline → in-process SQLite. Online → HTTP client.
+	if config.ResolveMode() == config.ModeOffline {
+		be, err := offline.New("")
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "agentsecrets: failed to open offline backend: %v\n", err)
+			os.Exit(1)
+		}
+		apiClient = be
+	} else {
+		// Resolve API URL with precedence: CLI flag > env var > config > default
+		resolvedURL := apiURL // CLI flag has highest precedence
+		if resolvedURL == "" {
+			resolvedURL = config.ResolveAPIBaseURL()
+		}
+
+		client := api.NewClient(func() string {
+			return config.GetAccessToken()
+		})
+		client.BaseURL = resolvedURL
+		apiClient = client
+	}
 
 	// Inject the stored 1Password service account token before any op CLI call.
 	// Only done when the env var isn't already present so explicit env vars win.

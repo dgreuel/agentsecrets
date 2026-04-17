@@ -15,12 +15,12 @@ import (
 
 // Service provides workspace management operations.
 type Service struct {
-	API *api.Client
+	API api.Backend
 }
 
 // NewService creates a new workspaces service.
-func NewService(apiClient *api.Client) *Service {
-	return &Service{API: apiClient}
+func NewService(backend api.Backend) *Service {
+	return &Service{API: backend}
 }
 
 // Create creates a new team workspace.

@@ -27,8 +27,8 @@ var (
 )
 
 // InitSecretsService sets up the service for the CLI
-func InitSecretsService(client *api.Client) {
-	secretsService = secrets.NewService(client)
+func InitSecretsService(backend api.Backend) {
+	secretsService = secrets.NewService(backend)
 }
 
 var secretsCmd = &cobra.Command{

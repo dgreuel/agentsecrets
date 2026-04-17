@@ -16,14 +16,14 @@ import (
 
 // Service coordinates all secret-related operations.
 type Service struct {
-	API *api.Client
+	API api.Backend
 	Env *EnvManager
 }
 
 // NewService creates a new secrets service.
-func NewService(apiClient *api.Client) *Service {
+func NewService(backend api.Backend) *Service {
 	return &Service{
-		API: apiClient,
+		API: backend,
 		Env: NewEnvManager(),
 	}
 }

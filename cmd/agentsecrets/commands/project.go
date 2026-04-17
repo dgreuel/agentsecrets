@@ -16,8 +16,8 @@ import (
 var projectService *projects.Service
 
 // InitProjectService sets up the service for the CLI
-func InitProjectService(client *api.Client) {
-	projectService = projects.NewService(client)
+func InitProjectService(backend api.Backend) {
+	projectService = projects.NewService(backend)
 }
 
 var projectCmd = &cobra.Command{

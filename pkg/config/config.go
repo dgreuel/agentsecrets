@@ -38,9 +38,19 @@ type GlobalConfig struct {
 	DefaultStorageMode int    `json:"default_storage_mode"`   // 1 = keychain (default), 2 = env_file, 3 = 1password
 	OnePasswordVault   string `json:"onepassword_vault,omitempty"` // Vault name for storage mode 3
 	APIBaseURL         string `json:"api_base_url,omitempty"` // Override backend API URL; precedence: CLI flag > env var > this config > default
+	// Mode selects the backend transport. "" / "online" use the cloud HTTP API.
+	// "offline" routes everything through the in-process SQLite-backed backend
+	// in pkg/api/offline.  See ResolveMode() for precedence.
+	Mode               string `json:"mode,omitempty"`
 	LastUpdateCheck    int64 `json:"last_update_check,omitempty"`
 	LatestVersion      string `json:"latest_version,omitempty"`
 }
+
+// ModeOnline routes API calls to the remote AgentSecrets cloud server.
+const ModeOnline = "online"
+
+// ModeOffline routes API calls to a local SQLite-backed backend; no network is used.
+const ModeOffline = "offline"
 
 // WorkspaceCacheEntry is a cached workspace with its decrypted key
 type WorkspaceCacheEntry struct {
@@ -672,4 +682,64 @@ func SetAPIBaseURL(url string) error {
 	}
 	c.APIBaseURL = url
 	return SaveGlobalConfig(c)
+}
+
+// modeOverride is set by the root command from the --offline / --online flags
+// before any subcommand resolves the mode. Empty means "no flag passed".
+var modeOverride string
+
+// SetModeOverride is called once at startup by the CLI flag parser.
+// Pass an empty string to clear (used by tests).
+func SetModeOverride(mode string) {
+	modeOverride = mode
+}
+
+// ResolveMode returns the active mode (ModeOnline or ModeOffline) with this
+// precedence:
+//  1. CLI flag override (--offline / --online), via SetModeOverride
+//  2. AGENTSECRETS_MODE environment variable
+//  3. ~/.agentsecrets/config.json mode field
+//  4. ModeOnline
+func ResolveMode() string {
+	mode, _ := ResolveModeWithSource()
+	return mode
+}
+
+// ResolveModeWithSource returns the active mode and the source that supplied it.
+// Sources: "flag", "AGENTSECRETS_MODE", "global config", "default".
+func ResolveModeWithSource() (string, string) {
+	if modeOverride != "" {
+		return normalizeMode(modeOverride), "flag"
+	}
+	if env := os.Getenv("AGENTSECRETS_MODE"); env != "" {
+		return normalizeMode(env), "AGENTSECRETS_MODE"
+	}
+	if c, err := LoadGlobalConfig(); err == nil && c != nil && c.Mode != "" {
+		return normalizeMode(c.Mode), "global config"
+	}
+	return ModeOnline, "default"
+}
+
+// IsOfflineMode is a convenience wrapper around ResolveMode.
+func IsOfflineMode() bool {
+	return ResolveMode() == ModeOffline
+}
+
+// SetMode persists the mode to the global config.
+func SetMode(mode string) error {
+	c, _ := LoadGlobalConfig()
+	if c == nil {
+		c = &GlobalConfig{}
+	}
+	c.Mode = normalizeMode(mode)
+	return SaveGlobalConfig(c)
+}
+
+func normalizeMode(s string) string {
+	switch s {
+	case ModeOffline, "off", "local", "single-user":
+		return ModeOffline
+	default:
+		return ModeOnline
+	}
 }

@@ -66,12 +66,12 @@ type IssueTokenResponse struct {
 
 // Service provides methods to interact with agent resources.
 type Service struct {
-	client *api.Client
+	client api.Backend
 }
 
 
-func NewService(client *api.Client) *Service {
-	return &Service{client: client}
+func NewService(backend api.Backend) *Service {
+	return &Service{client: backend}
 }
 
 // Register registers a new agent and issues its first token.

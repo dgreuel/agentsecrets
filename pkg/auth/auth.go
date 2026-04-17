@@ -35,12 +35,12 @@ import (
 
 // Service provides authentication operations.
 type Service struct {
-	API *api.Client
+	API api.Backend
 }
 
-// NewService creates a new auth service with the given API client.
-func NewService(apiClient *api.Client) *Service {
-	return &Service{API: apiClient}
+// NewService creates a new auth service with the given API backend.
+func NewService(backend api.Backend) *Service {
+	return &Service{API: backend}
 }
 
 // SignupRequest contains the information needed to create a new account.
@@ -58,6 +58,9 @@ type SignupRequest struct {
 //   - srp_salt      (used by client to derive SRP private key x)
 //   - encrypted_private_key + key_salt  (Argon2id-protected, server cannot decrypt)
 func (s *Service) Signup(req SignupRequest) error {
+	if config.IsOfflineMode() {
+		return s.offlineSignup(req)
+	}
 	// 1. Generate X25519 keypair and encrypt private key with Argon2id key.
 	keys, err := crypto.SetupUser(req.Password)
 	if err != nil {
@@ -105,6 +108,9 @@ func (s *Service) Signup(req SignupRequest) error {
 //   - privateKey, publicKey: pre-computed keypair (signup path only).
 //     Pass nil for both during a normal login; they will be decrypted locally.
 func (s *Service) PerformLogin(email, password string, privateKey, publicKey []byte) error {
+	if config.IsOfflineMode() {
+		return s.offlineLogin(email, password)
+	}
 	// ── Step 1: Request SRP challenge ──────────────────────────────────────────
 	initResp, err := s.API.Call("auth.login_init", "POST", map[string]string{
 		"email": email,

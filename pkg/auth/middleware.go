@@ -16,6 +16,14 @@ import (
 // It automatically refreshes the access token if it is expired or close to expiring,
 // assuming a valid refresh token exists.
 func (s *Service) EnsureAuth(cmd *cobra.Command, args []string) error {
+	if config.IsOfflineMode() {
+		// Offline mode skips token-expiry refresh entirely; the only auth check
+		// is whether a local user has been provisioned via `agentsecrets init`.
+		if config.GetEmail() == "" {
+			return fmt.Errorf("no offline account found. Run 'agentsecrets init' to create one")
+		}
+		return nil
+	}
 	if !config.IsAuthenticated() {
 		return fmt.Errorf("you must be logged in to perform this action. Run 'agentsecrets login'")
 	}

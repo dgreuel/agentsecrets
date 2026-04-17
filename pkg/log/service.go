@@ -34,12 +34,12 @@ type Filter struct {
 
 // Service provides methods to query local and cloud audit logs.
 type Service struct {
-	client *api.Client
+	client api.Backend
 	db     *sql.DB
 }
 
 // NewService creates a new log service. If db is nil, it tries to connect to the default local SQLite DB.
-func NewService(client *api.Client, db *sql.DB) (*Service, error) {
+func NewService(backend api.Backend, db *sql.DB) (*Service, error) {
 	if db == nil {
 		logger, err := proxy.NewAuditLogger("")
 		if err != nil {
@@ -48,7 +48,7 @@ func NewService(client *api.Client, db *sql.DB) (*Service, error) {
 		db = logger.DB()
 	}
 	return &Service{
-		client: client,
+		client: backend,
 		db:     db,
 	}, nil
 }
