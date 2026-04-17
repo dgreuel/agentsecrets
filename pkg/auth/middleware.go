@@ -72,7 +72,7 @@ func (s *Service) RefreshSession(refreshToken string) error {
 	}
 
 	data := map[string]string{
-		"refresh": refreshToken,
+		"refresh_token": refreshToken,
 	}
 
 	resp, err := s.API.Call("auth.refresh", "POST", data, nil, nil)
