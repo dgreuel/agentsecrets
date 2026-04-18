@@ -684,21 +684,20 @@ func SetAPIBaseURL(url string) error {
 	return SaveGlobalConfig(c)
 }
 
-// modeOverride is set by the root command from the --offline / --online flags
-// before any subcommand resolves the mode. Empty means "no flag passed".
+// modeOverride lets tests force a mode without touching the on-disk config.
 var modeOverride string
 
-// SetModeOverride is called once at startup by the CLI flag parser.
-// Pass an empty string to clear (used by tests).
+// SetModeOverride is used by tests to pin the resolved mode.
+// Pass an empty string to clear.
 func SetModeOverride(mode string) {
 	modeOverride = mode
 }
 
 // ResolveMode returns the active mode (ModeOnline or ModeOffline) with this
 // precedence:
-//  1. CLI flag override (--offline / --online), via SetModeOverride
+//  1. Test override via SetModeOverride
 //  2. AGENTSECRETS_MODE environment variable
-//  3. ~/.agentsecrets/config.json mode field
+//  3. ~/.agentsecrets/config.json mode field (set by `agentsecrets init`)
 //  4. ModeOnline
 func ResolveMode() string {
 	mode, _ := ResolveModeWithSource()
@@ -706,10 +705,10 @@ func ResolveMode() string {
 }
 
 // ResolveModeWithSource returns the active mode and the source that supplied it.
-// Sources: "flag", "AGENTSECRETS_MODE", "global config", "default".
+// Sources: "override", "AGENTSECRETS_MODE", "global config", "default".
 func ResolveModeWithSource() (string, string) {
 	if modeOverride != "" {
-		return normalizeMode(modeOverride), "flag"
+		return normalizeMode(modeOverride), "override"
 	}
 	if env := os.Getenv("AGENTSECRETS_MODE"); env != "" {
 		return normalizeMode(env), "AGENTSECRETS_MODE"

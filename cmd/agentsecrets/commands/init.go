@@ -102,6 +102,7 @@ func runInit(cmd *cobra.Command, args []string) error {
 			Options(
 				huh.NewOption("Create a new account", "signup"),
 				huh.NewOption("Login to existing account", "login"),
+				huh.NewOption("Use in offline mode (no cloud account, single user)", "offline"),
 			).
 			Value(&choice).
 			Run()
@@ -110,12 +111,17 @@ func runInit(cmd *cobra.Command, args []string) error {
 		}
 
 		fmt.Println()
-		if choice == "signup" {
+		switch choice {
+		case "signup":
 			if err := runSignup(); err != nil {
 				return err
 			}
-		} else {
+		case "login":
 			if err := runLoginFlow(); err != nil {
+				return err
+			}
+		case "offline":
+			if err := runOfflineInit(); err != nil {
 				return err
 			}
 		}
@@ -268,6 +274,107 @@ func runSignup() error {
 
 func runLoginFlow() error {
 	return performLogin()
+}
+
+// runOfflineInit persists mode=offline, then runs the offline signup flow.
+// Offline mode stays enabled in ~/.agentsecrets/config.json until the user
+// clears it (e.g. by re-running init with a cloud account).
+func runOfflineInit() error {
+	ui.Info("Offline mode — your secrets stay on this machine; no cloud account is created.")
+	fmt.Println()
+
+	if err := SwitchToOfflineMode(); err != nil {
+		ui.Error("Could not enable offline mode: " + err.Error())
+		return nil
+	}
+
+	var (
+		firstName string
+		lastName  string
+		email     string
+		password  string
+	)
+
+	form := huh.NewForm(
+		huh.NewGroup(
+			huh.NewInput().
+				Title("First name").
+				Value(&firstName).
+				Validate(func(s string) error {
+					if s == "" {
+						return fmt.Errorf("first name is required")
+					}
+					return nil
+				}),
+
+			huh.NewInput().
+				Title("Last name").
+				Value(&lastName).
+				Validate(func(s string) error {
+					if s == "" {
+						return fmt.Errorf("last name is required")
+					}
+					return nil
+				}),
+
+			huh.NewInput().
+				Title("Email").
+				Description("Used locally for audit attribution; never sent anywhere.").
+				Value(&email).
+				Validate(func(s string) error {
+					if s == "" {
+						return fmt.Errorf("email is required")
+					}
+					return nil
+				}),
+		),
+		huh.NewGroup(
+			huh.NewInput().
+				Title("Password").
+				Description("Minimum 8 characters — required to unlock this machine's store.").
+				EchoMode(huh.EchoModePassword).
+				Value(&password).
+				Validate(func(s string) error {
+					if len(s) < 8 {
+						return fmt.Errorf("password must be at least 8 characters")
+					}
+					return nil
+				}),
+
+			huh.NewInput().
+				Title("Confirm password").
+				EchoMode(huh.EchoModePassword).
+				Validate(func(s string) error {
+					if s != password {
+						return fmt.Errorf("passwords do not match")
+					}
+					return nil
+				}),
+		),
+	)
+
+	if err := form.Run(); err != nil {
+		return nil
+	}
+
+	fmt.Println()
+
+	if err := ui.Spinner("Setting up your local store...", func() error {
+		return authService.Signup(auth.SignupRequest{
+			FirstName: firstName,
+			LastName:  lastName,
+			Email:     email,
+			Password:  password,
+		})
+	}); err != nil {
+		ui.Error("Offline setup failed: " + err.Error())
+		return nil
+	}
+
+	fmt.Println()
+	ui.Success("Offline account ready!")
+	ui.Info("Run 'agentsecrets status' to see your session info.")
+	return nil
 }
 
 const workflowContent = `---

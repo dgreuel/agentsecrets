@@ -26,6 +26,12 @@ var statusCmd = &cobra.Command{
 		ui.Banner("AgentSecrets Status")
 		ui.Divider()
 
+		// Mode (online vs offline). Only surface the row when offline so online
+		// users aren't distracted by a setting they never touched.
+		if config.IsOfflineMode() {
+			ui.StatusRow("Mode:", "offline (local-only)")
+		}
+
 		// Auth status
 		if !config.IsAuthenticated() {
 			ui.StatusRowDim("Logged in:", "No")

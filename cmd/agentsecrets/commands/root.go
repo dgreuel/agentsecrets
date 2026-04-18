@@ -24,7 +24,6 @@ var (
 	workspaceService *workspaces.Service
 	apiClient        api.Backend
 	apiURL           string // Global flag: --api-url (highest precedence)
-	offlineFlag      bool   // Global flag: --offline (forces in-process backend)
 )
 
 // rootCmd is the base command when called without any subcommands
@@ -64,41 +63,9 @@ func Execute() error {
 func init() {
 	// Add global flags
 	rootCmd.PersistentFlags().StringVar(&apiURL, "api-url", "", "API base URL (overrides AGENTSECRETS_API_URL and config)")
-	rootCmd.PersistentFlags().BoolVar(&offlineFlag, "offline", false, "Run with the in-process SQLite backend (no network)")
 
-	// The flag value isn't bound until Cobra parses argv, but several callers
-	// (init() bodies in subcommand files, the global services below) resolve
-	// the mode immediately. Sniff os.Args directly so we get the right answer
-	// before Cobra runs.
-	for _, a := range os.Args[1:] {
-		if a == "--offline" {
-			config.SetModeOverride(config.ModeOffline)
-			offlineFlag = true
-			break
-		}
-	}
-
-	// Build the backend. Offline → in-process SQLite. Online → HTTP client.
-	if config.ResolveMode() == config.ModeOffline {
-		be, err := offline.New("")
-		if err != nil {
-			fmt.Fprintf(os.Stderr, "agentsecrets: failed to open offline backend: %v\n", err)
-			os.Exit(1)
-		}
-		apiClient = be
-	} else {
-		// Resolve API URL with precedence: CLI flag > env var > config > default
-		resolvedURL := apiURL // CLI flag has highest precedence
-		if resolvedURL == "" {
-			resolvedURL = config.ResolveAPIBaseURL()
-		}
-
-		client := api.NewClient(func() string {
-			return config.GetAccessToken()
-		})
-		client.BaseURL = resolvedURL
-		apiClient = client
-	}
+	apiClient = buildBackend()
+	wireServices(apiClient)
 
 	// Inject the stored 1Password service account token before any op CLI call.
 	// Only done when the env var isn't already present so explicit env vars win.
@@ -113,24 +80,22 @@ func init() {
 		keyring.Configure1Password(config.GetOnePasswordVault())
 	}
 
-	// Create the shared services
-	authService = auth.NewService(apiClient)
-	workspaceService = workspaces.NewService(apiClient)
-	InitProjectService(apiClient)
-	InitSecretsService(apiClient)
-
 	// Register all subcommands
 	rootCmd.AddCommand(initCmd)
 	rootCmd.AddCommand(loginCmd)
 	rootCmd.AddCommand(logoutCmd)
 	rootCmd.AddCommand(statusCmd)
 
-	// Add auth middleware to commands that require it
-	workspaceCmd.PersistentPreRunE = authService.EnsureAuth
-	projectCmd.PersistentPreRunE = authService.EnsureAuth
-	secretsCmd.PersistentPreRunE = authService.EnsureAuth
-	callCmd.PersistentPreRunE = authService.EnsureAuth
-	environmentCmd.PersistentPreRunE = authService.EnsureAuth
+	// Add auth middleware to commands that require it. Look up authService
+	// lazily so `agentsecrets init` can swap in the offline backend mid-flight.
+	ensureAuth := func(cmd *cobra.Command, args []string) error {
+		return authService.EnsureAuth(cmd, args)
+	}
+	workspaceCmd.PersistentPreRunE = ensureAuth
+	projectCmd.PersistentPreRunE = ensureAuth
+	secretsCmd.PersistentPreRunE = ensureAuth
+	callCmd.PersistentPreRunE = ensureAuth
+	environmentCmd.PersistentPreRunE = ensureAuth
 
 	rootCmd.AddCommand(workspaceCmd)
 	rootCmd.AddCommand(projectCmd)
@@ -144,4 +109,51 @@ func init() {
 	rootCmd.AddCommand(NewEnvCmd())
 	rootCmd.AddCommand(NewExecCmd())
 	rootCmd.AddCommand(opCmd)
+}
+
+// buildBackend returns the backend implied by the currently-resolved mode.
+// Online → HTTP client; offline → in-process SQLite backend.
+func buildBackend() api.Backend {
+	if config.ResolveMode() == config.ModeOffline {
+		be, err := offline.New("")
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "agentsecrets: failed to open offline backend: %v\n", err)
+			os.Exit(1)
+		}
+		return be
+	}
+
+	resolvedURL := apiURL // CLI flag has highest precedence
+	if resolvedURL == "" {
+		resolvedURL = config.ResolveAPIBaseURL()
+	}
+	client := api.NewClient(func() string {
+		return config.GetAccessToken()
+	})
+	client.BaseURL = resolvedURL
+	return client
+}
+
+// wireServices (re)points every package-global service at the given backend.
+func wireServices(be api.Backend) {
+	apiClient = be
+	authService = auth.NewService(be)
+	workspaceService = workspaces.NewService(be)
+	InitProjectService(be)
+	InitSecretsService(be)
+}
+
+// SwitchToOfflineMode persists mode=offline and swaps the live services over
+// to the in-process backend so the rest of the current command (typically
+// `agentsecrets init`) continues against the offline store.
+func SwitchToOfflineMode() error {
+	if err := config.SetMode(config.ModeOffline); err != nil {
+		return fmt.Errorf("enable offline mode: %w", err)
+	}
+	be, err := offline.New("")
+	if err != nil {
+		return fmt.Errorf("open offline backend: %w", err)
+	}
+	wireServices(be)
+	return nil
 }
