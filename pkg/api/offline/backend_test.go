@@ -191,6 +191,37 @@ func TestStubsReturn501(t *testing.T) {
 	}
 }
 
+// Regression: BatchSet hands us `"secrets": map[string]string{...}` rather
+// than `map[string]interface{}`. The handler must treat both as equivalent
+// because that's what a real HTTP request would deliver.
+func TestSecretsCreateAcceptsTypedStringMap(t *testing.T) {
+	be := newTestBackend(t)
+	resp, err := be.Call("secrets.create", "POST", map[string]interface{}{
+		"project_id":  "proj-typed",
+		"environment": "development",
+		"secrets":     map[string]string{"A": "1", "B": "2"},
+	}, nil, nil)
+	if err != nil {
+		t.Fatalf("create: %v", err)
+	}
+	if resp.StatusCode != http.StatusCreated {
+		t.Fatalf("create status = %d, want 201", resp.StatusCode)
+	}
+
+	resp, _ = be.Call("secrets.list", "GET", nil,
+		map[string]string{"project_id": "proj-typed"},
+		map[string]string{"environment": "development"})
+	var listResp struct {
+		Data struct {
+			Secrets []struct{ Key, Value string } `json:"secrets"`
+		} `json:"data"`
+	}
+	decodeBody(t, resp, &listResp)
+	if len(listResp.Data.Secrets) != 2 {
+		t.Fatalf("expected 2 secrets, got %d", len(listResp.Data.Secrets))
+	}
+}
+
 func TestUnknownEndpoint(t *testing.T) {
 	be := newTestBackend(t)
 	resp, _ := be.Call("nope.nope", "GET", nil, nil, nil)

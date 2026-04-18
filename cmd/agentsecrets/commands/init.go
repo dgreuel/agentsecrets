@@ -3,6 +3,7 @@ package commands
 import (
 	"fmt"
 	"os"
+	"os/user"
 	"path/filepath"
 	"strings"
 
@@ -288,46 +289,11 @@ func runOfflineInit() error {
 		return nil
 	}
 
-	var (
-		firstName string
-		lastName  string
-		email     string
-		password  string
-	)
-
+	// Offline mode only needs a password. Name and email aren't shown to
+	// anyone — we synthesise an email from the OS user so audit rows still
+	// carry an identifier.
+	var password string
 	form := huh.NewForm(
-		huh.NewGroup(
-			huh.NewInput().
-				Title("First name").
-				Value(&firstName).
-				Validate(func(s string) error {
-					if s == "" {
-						return fmt.Errorf("first name is required")
-					}
-					return nil
-				}),
-
-			huh.NewInput().
-				Title("Last name").
-				Value(&lastName).
-				Validate(func(s string) error {
-					if s == "" {
-						return fmt.Errorf("last name is required")
-					}
-					return nil
-				}),
-
-			huh.NewInput().
-				Title("Email").
-				Description("Used locally for audit attribution; never sent anywhere.").
-				Value(&email).
-				Validate(func(s string) error {
-					if s == "" {
-						return fmt.Errorf("email is required")
-					}
-					return nil
-				}),
-		),
 		huh.NewGroup(
 			huh.NewInput().
 				Title("Password").
@@ -359,10 +325,12 @@ func runOfflineInit() error {
 
 	fmt.Println()
 
+	email := offlineLocalEmail()
+
 	if err := ui.Spinner("Setting up your local store...", func() error {
 		return authService.Signup(auth.SignupRequest{
-			FirstName: firstName,
-			LastName:  lastName,
+			FirstName: "Local",
+			LastName:  "User",
 			Email:     email,
 			Password:  password,
 		})
@@ -375,6 +343,21 @@ func runOfflineInit() error {
 	ui.Success("Offline account ready!")
 	ui.Info("Run 'agentsecrets status' to see your session info.")
 	return nil
+}
+
+// offlineLocalEmail synthesises a human-readable identifier for the single
+// offline user. It's only displayed in status output and stamped onto local
+// audit rows — it never leaves the machine.
+func offlineLocalEmail() string {
+	if u, err := user.Current(); err == nil && u.Username != "" {
+		name := strings.ToLower(u.Username)
+		host, _ := os.Hostname()
+		if host == "" {
+			host = "local"
+		}
+		return name + "@" + host
+	}
+	return "local@agentsecrets"
 }
 
 const workflowContent = `---

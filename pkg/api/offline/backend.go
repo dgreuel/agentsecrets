@@ -134,15 +134,14 @@ func errorBody(msg string) map[string]string {
 	return map[string]string{"error": msg}
 }
 
-// decodeData best-effort coerces the service-layer `data` argument
-// (already known to be JSON-serialisable) into a generic map. Service callers
-// always pass map[string]interface{} or a struct that round-trips cleanly.
+// decodeData coerces the service-layer `data` argument into a generic map by
+// round-tripping through JSON. This matches what a real HTTP request would
+// deliver — concretely, typed containers like `map[string]string` become
+// `map[string]interface{}` with string-typed values — so handlers can rely on
+// a single shape regardless of how the caller spelled the payload.
 func decodeData(data interface{}) (map[string]interface{}, error) {
 	if data == nil {
 		return nil, nil
-	}
-	if m, ok := data.(map[string]interface{}); ok {
-		return m, nil
 	}
 	raw, err := json.Marshal(data)
 	if err != nil {
