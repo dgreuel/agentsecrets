@@ -6,6 +6,7 @@ import (
 	"github.com/charmbracelet/huh"
 	"github.com/spf13/cobra"
 
+	"github.com/The-17/agentsecrets/pkg/config"
 	"github.com/The-17/agentsecrets/pkg/ui"
 )
 
@@ -32,29 +33,36 @@ func performLogin() error {
 		password string
 	)
 
-	form := huh.NewForm(
-		huh.NewGroup(
-			huh.NewInput().
-				Title("Email").
-				Value(&email).
-				Validate(func(s string) error {
-					if s == "" {
-						return fmt.Errorf("email is required")
-					}
-					return nil
-				}),
+	isOffline := config.IsOfflineMode()
 
-			huh.NewInput().
-				Title("Password").
-				EchoMode(huh.EchoModePassword).
-				Value(&password).
-				Validate(func(s string) error {
-					if s == "" {
-						return fmt.Errorf("password is required")
-					}
-					return nil
-				}),
-		),
+	var fields []huh.Field
+	if !isOffline {
+		fields = append(fields, huh.NewInput().
+			Title("Email").
+			Value(&email).
+			Validate(func(s string) error {
+				if s == "" {
+					return fmt.Errorf("email is required")
+				}
+				return nil
+			}))
+	} else {
+		email = offlineLocalEmail()
+	}
+
+	fields = append(fields, huh.NewInput().
+		Title("Password").
+		EchoMode(huh.EchoModePassword).
+		Value(&password).
+		Validate(func(s string) error {
+			if s == "" {
+				return fmt.Errorf("password is required")
+			}
+			return nil
+		}))
+
+	form := huh.NewForm(
+		huh.NewGroup(fields...),
 	)
 
 	if err := form.Run(); err != nil {
@@ -63,14 +71,23 @@ func performLogin() error {
 
 	fmt.Println()
 
-	if err := ui.Spinner("Logging in...", func() error {
+	actionStr := "Logging in..."
+	successStr := "Logged in successfully!"
+	failStr := "Login failed"
+	if isOffline {
+		actionStr = "Unlocking..."
+		successStr = "Unlocked successfully!"
+		failStr = "Unlock failed"
+	}
+
+	if err := ui.Spinner(actionStr, func() error {
 		return authService.PerformLogin(email, password, nil, nil)
 	}); err != nil {
-		ui.Error("Login failed: " + err.Error())
+		ui.Error(failStr + ": " + err.Error())
 		return nil
 	}
 
 	fmt.Println()
-	ui.Success("Logged in successfully!")
+	ui.Success(successStr)
 	return nil
 }

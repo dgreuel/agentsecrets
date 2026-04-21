@@ -24,8 +24,14 @@ var logoutCmd = &cobra.Command{
 
 	Note: Project bindings (.agentsecrets/project.json) are NOT removed.`,
 	RunE: func(cmd *cobra.Command, args []string) error {
+		isOffline := config.IsOfflineMode()
+
 		if !config.IsAuthenticated() {
-			ui.Info("You're not logged in.")
+			if isOffline {
+				ui.Info("Your vault is already locked.")
+			} else {
+				ui.Info("You're not logged in.")
+			}
 			return nil
 		}
 
@@ -34,8 +40,12 @@ var logoutCmd = &cobra.Command{
 		// Confirm unless --force
 		if !forceLogout {
 			var confirm bool
+			title := fmt.Sprintf("Logout from %s?", email)
+			if isOffline {
+				title = "Lock your vault?"
+			}
 			err := huh.NewConfirm().
-				Title(fmt.Sprintf("Logout from %s?", email)).
+				Title(title).
 				Affirmative("Yes").
 				Negative("No").
 				Value(&confirm).
@@ -47,13 +57,22 @@ var logoutCmd = &cobra.Command{
 		}
 
 		if err := authService.Logout(); err != nil {
-			ui.Error("Logout failed: " + err.Error())
+			if isOffline {
+				ui.Error("Lock failed: " + err.Error())
+			} else {
+				ui.Error("Logout failed: " + err.Error())
+			}
 			return nil
 		}
 
 		fmt.Println()
-		ui.Success("Logged out successfully.")
-		ui.Info("Run 'agentsecrets login' to log in again.")
+		if isOffline {
+			ui.Success("Vault locked successfully.")
+			ui.Info("Run 'agentsecrets unlock' to unlock it again.")
+		} else {
+			ui.Success("Logged out successfully.")
+			ui.Info("Run 'agentsecrets login' to log in again.")
+		}
 		return nil
 	},
 }

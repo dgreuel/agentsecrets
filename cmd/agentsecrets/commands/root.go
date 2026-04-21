@@ -26,11 +26,24 @@ var (
 	apiURL           string // Global flag: --api-url (highest precedence)
 )
 
-// rootCmd is the base command when called without any subcommands
-var rootCmd = &cobra.Command{
-	Use:   "agentsecrets",
-	Short: "Secure secrets management for the AI era",
-	Long: lipgloss.JoinVertical(lipgloss.Left,
+func getLongDesc() string {
+	if config.IsOfflineMode() {
+		return lipgloss.JoinVertical(lipgloss.Left,
+			"",
+			ui.BrandStyle.Render("AgentSecrets"),
+			ui.DimStyle.Render("   Zero-knowledge secrets manager for AI-assisted development"),
+			"",
+			ui.LabelStyle.Render("   Manage secrets across projects, teams, and environments."),
+			ui.LabelStyle.Render("   AI assistants can use this tool without seeing secret values."),
+			"",
+			ui.DimStyle.Render("   Get started:"),
+			"   "+ui.BrandStyle.Render("agentsecrets init")+"        "+ui.LabelStyle.Render("Initialize a local vault"),
+			"   "+ui.BrandStyle.Render("agentsecrets unlock")+"      "+ui.LabelStyle.Render("Unlock your local vault"),
+			"   "+ui.BrandStyle.Render("agentsecrets status")+"      "+ui.LabelStyle.Render("Show current session info"),
+			"",
+		)
+	}
+	return lipgloss.JoinVertical(lipgloss.Left,
 		"",
 		ui.BrandStyle.Render("AgentSecrets"),
 		ui.DimStyle.Render("   Zero-knowledge secrets manager for AI-assisted development"),
@@ -43,11 +56,20 @@ var rootCmd = &cobra.Command{
 		"   "+ui.BrandStyle.Render("agentsecrets login")+"       "+ui.LabelStyle.Render("Login to existing account"),
 		"   "+ui.BrandStyle.Render("agentsecrets status")+"      "+ui.LabelStyle.Render("Show current session info"),
 		"",
-	),
+	)
+}
+
+// rootCmd is the base command when called without any subcommands
+var rootCmd = &cobra.Command{
+	Use:   "agentsecrets",
+	Short: "Secure secrets management for the AI era",
 	Version: Version,
 }
 
 func Execute() error {
+	// Dynamically update the Long description before executing
+	rootCmd.Long = getLongDesc()
+
 	// Run update check. It's efficient (24h interval) and has a short timeout.
 	if res, _ := config.CheckForUpdates(Version); res != nil && res.NewVersionAvailable {
 		ui.Banner(fmt.Sprintf("Update Available: %s → %s", res.CurrentVersion, res.LatestVersion))
@@ -63,6 +85,20 @@ func Execute() error {
 func init() {
 	// Add global flags
 	rootCmd.PersistentFlags().StringVar(&apiURL, "api-url", "", "API base URL (overrides AGENTSECRETS_API_URL and config)")
+
+	if config.IsOfflineMode() {
+		rootCmd.PersistentFlags().MarkHidden("api-url")
+		loginCmd.Use = "unlock"
+		loginCmd.Short = "Unlock your local vault"
+		loginCmd.Long = "Unlock your local AgentSecrets vault."
+
+		logoutCmd.Use = "lock"
+		logoutCmd.Short = "Lock your local vault"
+		logoutCmd.Long = "Lock your local AgentSecrets vault.\n\n\tThis will:\n\t1. Remove your private key from the OS keychain\n\t2. Clear stored tokens\n\t3. Clear cached workspace keys\n\n\tNote: Project bindings (.agentsecrets/project.json) are NOT removed."
+
+		initCmd.Short = "Initialize a local vault"
+		initCmd.Long = "Initialize a local AgentSecrets vault."
+	}
 
 	apiClient = buildBackend()
 	wireServices(apiClient)
