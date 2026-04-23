@@ -276,8 +276,14 @@ func (s *Service) PerformLogin(email, password string, privateKey, publicKey []b
 	return nil
 }
 
-// Logout clears all stored credentials and invalidates the server session.
+// Logout clears stored credentials and (for online mode) invalidates the server session.
+// In offline mode it only clears session tokens so that mode, email, and local auth
+// material are preserved — the user can unlock again without re-running init.
 func (s *Service) Logout() error {
+	if config.IsOfflineMode() {
+		return config.StoreTokens("", "", "")
+	}
+
 	email := config.GetEmail()
 
 	// Best-effort: tell server to invalidate tokens.
