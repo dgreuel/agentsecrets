@@ -17,10 +17,11 @@ import (
 // assuming a valid refresh token exists.
 func (s *Service) EnsureAuth(cmd *cobra.Command, args []string) error {
 	if config.IsOfflineMode() {
-		// Offline mode skips token-expiry refresh entirely; the only auth check
-		// is whether a local user has been provisioned via `agentsecrets init`.
 		if config.GetEmail() == "" {
 			return fmt.Errorf("no offline account found. Run 'agentsecrets init' to create one")
+		}
+		if !config.IsAuthenticated() {
+			return fmt.Errorf("vault is locked. Run 'agentsecrets unlock' to unlock it")
 		}
 		return nil
 	}

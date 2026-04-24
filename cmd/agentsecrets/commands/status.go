@@ -26,9 +26,11 @@ var statusCmd = &cobra.Command{
 		ui.Banner("AgentSecrets Status")
 		ui.Divider()
 
+		isOffline := config.IsOfflineMode()
+
 		// Mode (online vs offline). Only surface the row when offline so online
 		// users aren't distracted by a setting they never touched.
-		if config.IsOfflineMode() {
+		if isOffline {
 			ui.StatusRow("Mode:", "offline (local-only)")
 		}
 
@@ -36,8 +38,13 @@ var statusCmd = &cobra.Command{
 		if !config.IsAuthenticated() {
 			ui.StatusRowDim("Logged in:", "No")
 			fmt.Println()
-			ui.Info("  Run 'agentsecrets init' to create an account")
-			ui.Info("  Run 'agentsecrets login' to log in")
+			if isOffline {
+				ui.Info("  Run 'agentsecrets init --storage-mode 1' to initialize")
+				ui.Info("  Run 'agentsecrets unlock' to unlock")
+			} else {
+				ui.Info("  Run 'agentsecrets init' to create an account")
+				ui.Info("  Run 'agentsecrets login' to log in")
+			}
 			fmt.Println()
 			return nil
 		}
@@ -48,7 +55,7 @@ var statusCmd = &cobra.Command{
 		// Workspace info
 		wsID := config.GetSelectedWorkspaceID()
 		global, _ := config.LoadGlobalConfig()
-		
+
 		wsDisplay := "—"
 		wsDim := true
 		if wsID != "" && global != nil {
@@ -60,7 +67,7 @@ var statusCmd = &cobra.Command{
 				wsDim = false
 			}
 		}
-		
+
 		if wsDim {
 			ui.StatusRowDim("Selected Workspace:", wsDisplay)
 		} else {
@@ -86,26 +93,28 @@ var statusCmd = &cobra.Command{
 			}
 			ui.StatusRow("Current Project:", projectDisplay)
 
-			// Sync info
-			secretsDisplay := "Unable to calculate"
-			if secretsService != nil {
-				diff, diffErr := secretsService.Diff("", "")
-				if diffErr != nil {
-					secretsDisplay = fmt.Sprintf("Could not check (%s)", diffErr.Error())
-				} else {
-					syncedCount := len(diff.Unchanged)
-					unsyncedCount := len(diff.Added) + len(diff.Changed) + len(diff.Removed)
-					total := syncedCount + unsyncedCount
-					if total == 0 {
-						secretsDisplay = "No secrets found"
+			if !isOffline {
+				// Sync info
+				secretsDisplay := "Unable to calculate"
+				if secretsService != nil {
+					diff, diffErr := secretsService.Diff("", "")
+					if diffErr != nil {
+						secretsDisplay = fmt.Sprintf("Could not check (%s)", diffErr.Error())
 					} else {
-						secretsDisplay = fmt.Sprintf("%d synced (%d unsynced)", syncedCount, unsyncedCount)
+						syncedCount := len(diff.Unchanged)
+						unsyncedCount := len(diff.Added) + len(diff.Changed) + len(diff.Removed)
+						total := syncedCount + unsyncedCount
+						if total == 0 {
+							secretsDisplay = "No secrets found"
+						} else {
+							secretsDisplay = fmt.Sprintf("%d synced (%d unsynced)", syncedCount, unsyncedCount)
+						}
 					}
 				}
+				ui.StatusRow("Secrets:", secretsDisplay)
+
+				ui.StatusRow("Activity:", fmt.Sprintf("Last Push: %s | Last Pull: %s", formatTime(p.LastPush), formatTime(p.LastPull)))
 			}
-			ui.StatusRow("Secrets:", secretsDisplay)
-			
-			ui.StatusRow("Activity:", fmt.Sprintf("Last Push: %s | Last Pull: %s", formatTime(p.LastPush), formatTime(p.LastPull)))
 		} else {
 			ui.StatusRowDim("Current Project:", "—")
 		}

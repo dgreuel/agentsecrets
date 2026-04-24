@@ -34,7 +34,7 @@ func InitSecretsService(backend api.Backend) {
 var secretsCmd = &cobra.Command{
 	Use:   "secrets",
 	Short: "Manage your secrets",
-	Long:  `Add, retrieve, and synchronize secrets for your projects. Secrets are encrypted locally before being stored in the cloud.`,
+	Long:  `Add, retrieve, and synchronize secrets for your projects. Secrets are encrypted before being stored.`,
 }
 
 var secretsSetCmd = &cobra.Command{
@@ -53,7 +53,7 @@ var secretsGetCmd = &cobra.Command{
 
 var secretsListCmd = &cobra.Command{
 	Use:   "list",
-	Short: "List all secret keys in the cloud",
+	Short: "List all secret keys",
 	RunE:  runSecretsList,
 }
 
@@ -88,6 +88,12 @@ func init() {
 	secretsSetCmd.Flags().BoolVar(&allEnvs, "all-envs", false, "Set in all three environments simultaneously")
 	secretsDiffCmd.Flags().StringVar(&diffFrom, "from", "", "Source environment for cross-environment diff")
 	secretsDiffCmd.Flags().StringVar(&diffTo, "to", "", "Target environment for cross-environment diff")
+
+	if config.IsOfflineMode() {
+		secretsPullCmd.Hidden = true
+		secretsPushCmd.Hidden = true
+		secretsDiffCmd.Hidden = true
+	}
 
 	secretsCmd.AddCommand(
 		secretsSetCmd,
@@ -139,7 +145,11 @@ func runSecretsSet(cmd *cobra.Command, args []string) error {
 		return nil
 	}
 
-	if err := ui.Spinner(fmt.Sprintf("Encrypting and syncing %d secrets...", len(kv)), func() error {
+	action := "Encrypting and syncing"
+	if config.IsOfflineMode() {
+		action = "Encrypting and saving"
+	}
+	if err := ui.Spinner(fmt.Sprintf("%s %d secrets...", action, len(kv)), func() error {
 		return secretsService.BatchSet(kv, "")
 	}); err != nil {
 		return fmt.Errorf("failed to set secrets: %w", err)
@@ -177,7 +187,11 @@ func runSecretsList(cmd *cobra.Command, args []string) error {
 	results := make(chan envResult, 3)
 	var wg sync.WaitGroup
 
-	if err := ui.Spinner("Fetching keys from all environments...", func() error {
+	fetchMsg := "Fetching keys from all environments..."
+	if config.IsOfflineMode() {
+		fetchMsg = "Loading keys from all environments..."
+	}
+	if err := ui.Spinner(fetchMsg, func() error {
 		for _, e := range envs {
 			wg.Add(1)
 			go func(envName string) {
@@ -461,7 +475,11 @@ func runSecretsDelete(cmd *cobra.Command, args []string) error {
 		return nil
 	}
 
-	ui.Success(fmt.Sprintf("Deleted %s from cloud and local files.", key))
+	if config.IsOfflineMode() {
+		ui.Success(fmt.Sprintf("Deleted %s.", key))
+	} else {
+		ui.Success(fmt.Sprintf("Deleted %s from cloud and local files.", key))
+	}
 	return nil
 }
 
